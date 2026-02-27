@@ -1,0 +1,62 @@
+# ZeroClaw 进化纪实：从 0 到 1803 次提交的深度溯源报告
+
+ZeroClaw 不是一天建成的，但它的起点却高得出奇。通过对 1803 次提交记录的深度挖掘，我们还原了这只"零开销、零妥协"的锈色巨螯是如何一步步成长的。
+
+---
+
+## 🏗️ 创始阶段：Genesis (提交 05cb353)
+
+**Git 记录：** `feat: initial release — ZeroClaw v0.1.0`
+
+与大多数项目从一个 [main.rs](file:///d:/devprog/ai_dev_prog/zeroclaw/src/main.rs) 的 "Hello World" 开始不同，ZeroClaw 的第一个公开提交就是一个功能完备的 v0.1.0。
+- **技术关键词：** Trait-driven, Rust single binary, Security-first.
+- **专家点评 (Rust 专家)：** "起手就是高度抽象的 Trait 设计，这意味着创始团队在代码开源前就已经完成了对 Agent 通用架构的深度思考。这种设计保证了后期的极速扩张而不会导致代码腐化。"
+
+---
+
+## 🔋 内核补全期：基础设施的深度构建 (提交 0e7f501)
+
+**Git 记录：** `feat: full-stack search engine — FTS5, vector search, hybrid merge...`
+
+在解决了"能跑"之后，团队立即转向了"记忆"。
+- **技术突破：** 摒弃昂贵的外部向量数据库，直接在 SQLite 中实现 FTS5 和 Vector 混合检索。
+- **专家点评 (数据库专家)：** "在 <5MB 内存限制下塞进一个混合搜索引擎，这是对 SQLite 能力的极限压榨。这奠定了 ZeroClaw 在边缘侧处理私有知识库的绝对优势。"
+
+---
+
+## 🌐 生态爆发期：25 种 Channel 与 1000+ 测试 (提交 ecc8865 附近)
+
+**Git 记录：** `feat: add WhatsApp Business API channel (#1472)`
+
+这一阶段，ZeroClaw 像开了挂一样支持了几乎所有主流通讯工具。同时，测试用例激增到 1000+。
+- **核心成果：** Telegram, Discord, WhatsApp, Lark, 飞书，甚至 iMessage。
+- **专家点评 (通讯专家)：** "多渠道适配不仅是代码量，更是对多平台 Webhook、WebSocket、Long Polling 语义的统一。ZeroClaw 成功将复杂的通讯壁垒抹平为统一的 `Channel` Trait。"
+
+---
+
+## 🧠 智能进化期：从工具到自主智能体 (提交 35b63d6 附近)
+
+**Git 记录：** `feat: SkillForge — automated skill discovery, evaluation & integration engine (#144)`
+
+Agent 不再只是"被动等待指令"，开始具备"自我进化"的能力。
+- **核心逻辑：** 引入 SOP (标准操作流程) 引擎和 SkillForge 自动技能流水线。
+- **专家点评 (AI 架构师)：** "SkillForge 的出现让集成新能力从'写代码'变成了'Scout & Evaluate'的过程。这是从可交互 Agent 向真正的自主智能体 (Autonomous Agent) 跨越的关键一步。"
+
+---
+
+## 📱 现代完善期：全平台化与安全性再加固 (近期提交)
+
+**近期动态：** Android Client Foundation (#2040), Role-based Policy (#1978), Skills 体系设计。
+- **现状：** ZeroClaw 正在向移动端延伸，并引入了更加严苛的 OTP 验证和角色权限控制。
+- **专家点评 (安全专家)：** "随着应用场景的复杂，ZeroClaw 在保持极简的同时，将企业级的安全性和多端接入能力做到了极致。这已经不仅仅是一个工具，而是一个 Agentic OS。"
+
+---
+
+## 🎨 总结：为什么 ZeroClaw 能成？
+
+1. **坚持 Rust：** 极致的内存与速度保证了其在 $10 硬件上的生存能力。
+2. **Trait 为王：** 極高的可扩展性让全球开发者能快速贡献 Provider 和 Channel。
+3. **安全底色：** 相比于追求酷炫功能的 Agent，ZeroClaw 在第一天就选择了最难的安全路径。
+
+> **"ZeroClaw 的 1803 次提交，是 1803 次对臃肿 AI 软件生态的拒绝。"**
+> —— 全体专家组评审总结
