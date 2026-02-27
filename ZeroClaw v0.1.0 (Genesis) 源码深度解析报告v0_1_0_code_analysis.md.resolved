@@ -1,0 +1,97 @@
+# ZeroClaw v0.1.0 (Genesis) 源码深度解析报告
+
+> **目标：** 分析 ZeroClaw 初始提交（Commit: `05cb353`）的代码实现，还原项目在诞生之日的架构蓝图与技术底色。
+
+---
+
+## 一、 项目背景与物理布局
+
+在 v0.1.0 版本中，ZeroClaw 已经呈现出一个高度模块化的 Rust 项目结构。不同于原型项目惯用的单文件结构，Genesis 版本直接采用了**多模块目录结构**（Cargo Workspace 风格）：
+
+- [src/main.rs](file:///d:/devprog/ai_dev_prog/zeroclaw/src/main.rs): 全局 CLI 入口与指令路由。
+- `src/agent/`: 核心编排循环（Agentic Loop）。
+- `src/providers/`: 大模型适配层（Trait 实现）。
+- `src/channels/`: 通讯网关层（Trait 实现）。
+- `src/tools/`: 原子能力执行层。
+- `src/memory/`: RAG 存储与检索系统。
+- `src/security/`: 权限、沙箱与安全策略。
+- `src/config/`: 强类型配置映射。
+
+---
+
+## 二、 核心架构：Trait-Driven Pluggability
+
+ZeroClaw 在 0.1.0 版本的核心设计哲学是 **"Everything is a Trait"**。这种设计使得项目在第一天就具备了工业级的可扩展性。
+
+### 1. 通讯管道 (`src/channels/traits.rs`)
+```rust
+#[async_trait]
+pub trait Channel: Send + Sync {
+    fn name(&self) -> &str;
+    async fn listen(&self, tx: mpsc::Sender<ChannelMessage>) -> Result<()>;
+    async fn send(&self, message: &str, recipient: &str) -> Result<()>;
+}
+```
+**0.1.0 实现：** 已内置 Telegram, Discord, Slack, Webhook。
+**设计意图：** 屏蔽不同聊天平台的协议差异，将所有输入、输出标准化为 `ChannelMessage`。
+
+### 2. 模型服务 (`src/providers/traits.rs`)
+```rust
+#[async_trait]
+pub trait Provider: Send + Sync {
+    async fn chat(&self, message: &str, model: &str, temp: f64) -> Result<String>;
+}
+```
+**0.1.0 实现：** 已支持 OpenAI, Anthropic, OpenRouter, Ollama。
+**设计意图：** 屏蔽 API 格式差异，统一处理超时、重试和流式传输（雏形）。
+
+---
+
+## 三、 依赖项分层与极简主义
+
+v0.1.0 的 `Cargo.toml` 展现了极其严苛的依赖选择，这直接解释了为什么它能跑在 $10 的硬件上：
+
+| 库 | 用途 | 专家点评 (系统工程师) |
+|----|----|----|
+| `tokio` | 异步运行时 | 仅开启 rt-multi-thread 和 macros 特性，拒绝全量加载。 |
+| `reqwest` | HTTP 客户端 | 启用 `rustls-tls` 而非编译重量级的 OpenSSL。 |
+| `rusqlite` | 存储引擎 | 静态链接（bundled），保证跨平台二进制兼容性且零外部库依赖。 |
+| `clap` | CLI 框架 | 使用 derive 宏，代码量小且静态编译性能最佳。 |
+| `tungstenite` | WebSocket | 用于 Discord 的实时监听，保持极小内存开销。 |
+
+---
+
+## 四、 关键系统实现深挖
+
+### 1. 混合搜索系统 (src/memory/sqlite.rs)
+在 0.1.0 中，团队已经手动实现了基于 SQLite 的简单 RAG：
+- **FTS5：** 用于关键词全文检索。
+- **Vector Proxy：** 初版通过将向量存储为 Blob，读取后由 Rust 侧计算 `cosine_similarity`（余弦相似度）。
+- **Hybrid Merge：** 通过权重参数手动混合关键词与向量搜索的分数。
+
+### 2. 安全沙箱 (src/security/policy.rs)
+Genesis 版本即确立了三层防护：
+- **目录白名单：** 所有的 `file_read`/`file_write` 工具必须经过 `Path::canonicalize` 校验，禁止读取工作目录（Workspace）以外的文件。
+- **动态配对：** 启动时生成临时 Pairing Code，Gateway 接口请求必须携带加密 Exchange 后的 Token。
+- **自愈式 Config：** 启动时自动校验敏感权限，若配置为 `runtime.kind = "native"`，则会警告用户当前环境非沙箱模式。
+
+---
+
+## 五、 Agent 运行时循环 (src/agent/loop_.rs)
+
+0.1.0 的 Agent 循环已具备"思考-行动"的闭环逻辑：
+1. **Context Recall：** 收到消息后，自动从 SQLite 检索相关上下文。
+2. **System Prompt 注入：** 动态组装当前可用的 Tools 文档和 Skills 提示词。
+3. **Tool Call 解析：** 手写了对输出中 `<tool_call>...</tool_call>` 标签的解析逻辑。
+4. **回传循环：** 执行结果作为回复，重新塞入上下文进行递归推理。
+
+---
+
+## 六、 结论：成熟的起点
+
+通过对 v0.1.0 的审计，我们可以得出结论：**ZeroClaw 不是从简单的聊天机器人脚本演进而来的，它从诞生的第一天起就是一个旨在建立标准、追求极致性能的"智能体操作系统"原型。**
+
+其架构的稳定性和前瞻性，使得项目能够支撑起后续 1800 次提交的快速堆叠，而无需进行伤筋动骨的底座重构。
+
+---
+*报告结束 — ZeroClaw 溯源工程组*
