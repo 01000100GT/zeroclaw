@@ -1,0 +1,343 @@
+# ZeroClaw Skills 体系设计方案 — 7位世界级专家评审报告
+
+## 项目全景速览
+
+ZeroClaw 是一个纯 Rust 编写、trait-driven 的自主 AI Agent 运行时，核心特性：
+
+| 维度 | 数据 |
+|------|------|
+| 语言/二进制 | 100% Rust, ~8.8MB 单文件 |
+| 内存/启动 | <5MB RAM, <10ms 冷启动 |
+| LLM Provider | 17 个（OpenAI/Anthropic/Gemini/Ollama/Bedrock 等） |
+| 通讯 Channel | 25 个（Telegram/Discord/Slack/WhatsApp/微信/飞书/钉钉等） |
+| 内置 Tool | 58 个（Shell/文件/浏览器/MCP/WASM/SOP/子代理等） |
+| 已有 Skill 系统 | `src/skills/` 支持 SKILL.toml + SKILL.md 双格式加载 |
+| SkillForge 引擎 | Scout→Evaluate→Integrate 自动发现/评估/集成流水线 |
+| SOP 引擎 | 含审计/门控/条件判断/指标追踪的标准操作流程 |
+| CI/CD | 44 个 GitHub Workflow + pre-push hook |
+
+> **现状：项目内尚未创建任何 SKILL.md 文件**，Skill 系统基础设施已就绪但"菜谱"为空。
+
+---
+
+## 一、7位世界级专家评审意见
+
+### 🧠 专家 1 — AI Agent 系统架构师
+
+> **核心关切：渐进式加载与上下文预算管理**
+
+"ZeroClaw 的 `load_skills` 已经支持从 `~/.zeroclaw/workspace/skills/` 和 Open Skills 社区仓库两级加载，这与 Anthropic 指南中**渐进式加载**的理念天然契合——元数据描述始终可见，正文按需加载。
+
+但现在 58 个内置 Tool 已经很重，Skills 的描述（description）必须极其精准，否则 Agent 编排循环（`src/agent/`）会被无关 Skill 淹没。**建议每个 Skill 的 description 必须包含触发关键词和负面排除条件**，且按 AGENTS.md 的 ISP 原则，每个 Skill 只做一件事。"
+
+### 🔒 专家 2 — 零信任安全架构师
+
+> **核心关切：Skill 脚本的沙箱执行边界**
+
+"项目有 `allow_scripts` 配置控制 Skill 内脚本是否执行，`src/security/` 有完整的文件系统沙箱和命令白名单。但 Skill 的 `scripts/` 目录是**最大的攻击面扩展点**。
+
+建议所有 Skill 中的验证脚本必须通过 `src/runtime/` 的 Docker 或 WASM 沙箱执行，不允许在 native 模式下直接加载社区 Skill 的 scripts。每个 Skill 应声明所需权限（文件读写范围、网络访问、Shell 命令），遵循 AGENTS.md 的**最小权限和 Deny-by-Default 原则**。"
+
+### ⚡ 专家 3 — 高性能系统工程师（Rust 专家）
+
+> **核心关切：Skill 不能成为性能退化的入口**
+
+"项目用 `opt-level=z` + `lto=fat` + `strip` 保持 8.8MB 二进制和 <5MB 内存。Skill 系统是运行时加载（非编译时），所以不影响二进制体积，这很好。
+
+但要注意：SKILL.md 的解析（`load_skill_md`，~40行 YAML 前言解析）在 Agent 每次启动时都会触发。如果 Skills 数量膨胀到几十个，需要加缓存层。**建议 Skills 总数控制在 10-15 个以内**，优先用**少量高质量的"菜谱"**替代大量碎片化的技巧。"
+
+### 📡 专家 4 — 多渠道通信与产品策略专家
+
+> **核心关切：Skill 应该与 Channel 联动而非仅服务开发者**
+
+"25个 Channel 是 ZeroClaw 最强的护城河，但当前的 Skill 构想大多偏向开发者工作流。真正的杀手级 Skill 应该是**面向最终用户在聊天窗口内触发的场景**。
+
+比如用户在 Telegram 说'帮我订明天下午三点的会议'，一个 Calendar Skill 就应该被自动触发。Skill 的 description 写法要从**终端用户语言**出发，而不仅是开发者术语。"
+
+### 🏗️ 专家 5 — DevOps/SRE 基础架构专家
+
+> **核心关切：Skill 与 SOP 引擎、Heartbeat/Cron 的整合**
+
+"项目已经有 `src/sop/`（标准操作流程引擎，含门控/审批/条件）和 `src/cron/`/`src/heartbeat/`。这些是自动化运维的最佳基座。
+
+**关键建议：不要让 Skill 和 SOP 变成两套平行系统**。Skill 应该聚焦'如何做'（知识和方法论），SOP 聚焦'按什么流程做'（编排和审批门控）。两者通过 SOP 调用 Skill 来联动，保持 SRP 原则。"
+
+### 📝 专家 6 — 技术文档与 i18n 专家
+
+> **核心关切：Skill 必须遵循项目的文档治理体系**
+
+"项目有 7 种语言的 i18n 支持（en, zh-CN, ja, ru, fr, vi, el）和严格的文档变更必须同步 i18n 的规则。每个 Skill 的 SKILL.md 默认用英文编写，但 description 字段（也就是触发判断的关键）**必须考虑多语言用户的触发习惯**。
+
+建议在 SKILL.md 的 YAML 元数据中增加 `trigger_keywords` 列表，包含多语言关键词，而非仅依赖自然语言描述匹配。"
+
+### 🔬 专家 7 — WASM/WebAssembly 生态专家
+
+> **核心关切：WASM Skills 是生态繁荣的关键通道**
+
+"项目同时有 `wasmi`（轻量内嵌解释器）和 `wasmtime`（高性能 JIT）两个 WASM 引擎，前者用于 `runtime-wasm` 特性，后者用于 `wasm-tools` 特性的插件引擎。
+
+**WASM Skills 的设计应该分两层**：一层是纯数据转换（用 wasmi，安全但受限），一层是复杂业务逻辑（用 wasmtime WASI，有 I/O 能力但需权限声明）。指南中说的'代码优先于文字指令'，在这里就是'编译为 WASM 优先于 Shell 脚本'。"
+
+---
+
+## 二、推荐创建的 Skills 及其完整设计
+
+基于以上专家评审和项目实际，按优先级排列如下 **8 个 Skills**：
+
+---
+
+### Skill 1: `rust-code-quality` — Rust 代码质量守门人
+
+```
+rust-code-quality/
+├── SKILL.md
+├── scripts/
+│   ├── check_quality.sh      # cargo fmt + clippy + test
+│   └── strict_delta.sh       # 仅检查变更行
+└── references/
+    └── naming_conventions.md  # 从 AGENTS.md 6.3 提取的命名规则
+```
+
+**设计理由：** 项目有 `dev/ci.sh`、`scripts/ci/rust_quality_gate.sh`、`scripts/ci/rust_strict_delta_gate.sh` 等多种检查脚本，但开发者需要记住不同场景调用哪个。这个 Skill 将决策逻辑封装为一句话触发。
+
+**SKILL.md 核心：**
+```yaml
+---
+name: rust-code-quality
+description: >
+  ZeroClaw Rust代码质量检查与修复。当用户提到"检查代码"、"lint"、"格式化"、
+  "clippy"、"提交前检查"、"代码质量"、"pre-push"时触发。
+  不用于：文档检查、CI配置修改、依赖升级。
+---
+```
+- 自动判断变更范围，选择 `--strict` 或 `delta` 模式
+- 修复前先 dry-run 展示差异
+- 遵循 AGENTS.md §8 验证矩阵的完整流程
+
+---
+
+### Skill 2: `pr-workflow` — PR 全生命周期管理
+
+```
+pr-workflow/
+├── SKILL.md
+├── scripts/
+│   └── verify_pr_ready.sh    # 自动检查 DoR 清单
+└── references/
+    ├── pr_template.md         # 从 .github/pull_request_template.md 提取
+    ├── risk_tiers.md          # AGENTS.md §5 风险分级
+    └── supersede_template.md  # AGENTS.md §9.3 替代PR模板
+```
+
+**设计理由：** 项目有极其详细的 PR 流程规范（DoR/DoD、Track A/B/C 风险分级、Supersede 归因、Co-authored-by 规则），分散在 AGENTS.md、CONTRIBUTING.md、docs/pr-workflow.md 中。开发者或 AI Agent 经常遗漏步骤。
+
+**SKILL.md 核心：**
+```yaml
+---
+name: pr-workflow
+description: >
+  管理ZeroClaw的PR创建、审查和合并流程。当用户提到"创建PR"、"提交PR"、
+  "PR检查"、"代码审查"、"合并"、"supersede"时触发。
+  包含：风险分级、DoR/DoD检查、分支/worktree管理、归因模板。
+  不用于：代码编写本身、issue管理。
+---
+```
+
+---
+
+### Skill 3: `new-provider` — 新 LLM Provider 接入向导
+
+```
+new-provider/
+├── SKILL.md
+└── references/
+    ├── provider_trait.md       # Provider trait 接口规范
+    ├── factory_pattern.md      # 工厂注册模式
+    └── test_template.rs        # 测试模板
+```
+
+**设计理由：** 项目有 17 个 Provider，每个几万行代码。新增 Provider 是最常见的贡献场景之一（CONTRIBUTING.md 专门写了 How to Add a New Provider），但涉及 trait 实现、工厂注册、可靠性封装（`reliable.rs`）、配额适配（`quota_adapter.rs`）等多层，容易遗漏。
+
+**SKILL.md 核心：**
+```yaml
+---
+name: new-provider
+description: >
+  引导创建新的LLM Provider集成。当用户提到"添加provider"、"接入模型"、
+  "新增AI引擎"、"添加API"、"实现Provider trait"时触发。
+  覆盖：trait实现、工厂注册、可靠性封装、测试编写。
+  不用于：修改现有provider的bug修复。
+---
+```
+
+---
+
+### Skill 4: `new-channel` — 新通讯渠道接入向导
+
+```
+new-channel/
+├── SKILL.md
+└── references/
+    ├── channel_trait.md        # Channel trait 接口规范
+    ├── allowlist_pattern.md    # 白名单安全模式
+    └── test_template.rs        # 测试模板
+```
+
+**设计理由：** 与 Provider 同理，25 个 Channel 是最复杂的子系统之一（`channels/mod.rs` 高达 412KB）。新增 Channel 需要理解 send/listen/health_check 语义、白名单授权、media attachment 处理等。
+
+**SKILL.md 核心：**
+```yaml
+---
+name: new-channel
+description: >
+  引导创建新的通讯渠道集成。当用户提到"添加channel"、"接入消息平台"、
+  "新增通讯渠道"、"实现Channel trait"时触发。
+  覆盖：trait实现、白名单配置、健康检查、消息分片。
+  不用于：修改现有channel的配置调整。
+---
+```
+
+---
+
+### Skill 5: `security-review` — 安全变更审查
+
+```
+security-review/
+├── SKILL.md
+├── scripts/
+│   └── check_security_surface.sh  # 检测高风险路径变更
+└── references/
+    ├── risk_paths.md             # 从 AGENTS.md §5 提取的风险路径
+    ├── security_checklist.md     # README中的安全检查清单
+    └── anti_patterns.md          # AGENTS.md §10 反模式
+```
+
+**设计理由：** AGENTS.md 明确将 `src/security/`, `src/runtime/`, `src/gateway/`, `src/tools/`, `.github/workflows/` 标记为 **High Risk** 路径，对这些路径的变更需要 2-pass review + rollback 计划。但实际操作中很容易遗漏此检查。
+
+**SKILL.md 核心：**
+```yaml
+---
+name: security-review
+description: >
+  ZeroClaw安全敏感变更的自动审查。当变更涉及security、runtime、gateway、
+  tools、workflows目录，或用户提到"安全审查"、"权限变更"、"沙箱"、
+  "白名单修改"时触发。
+  执行：路径风险分级、安全清单对照、回滚方案验证。
+  不用于：普通文档或测试的变更。
+---
+```
+
+---
+
+### Skill 6: `docs-i18n` — 文档国际化同步
+
+```
+docs-i18n/
+├── SKILL.md
+├── scripts/
+│   └── check_i18n_parity.sh   # 检查7语言文档导航一致性
+└── references/
+    └── locale_map.md           # 从 docs/i18n-guide.md 提取的语种清单和规范
+```
+
+**设计理由：** 项目支持 7 种语言（en, zh-CN, ja, ru, fr, vi, el），AGENTS.md §4.1-§4.2 强制要求文档变更必须在同一 PR 内完成 i18n 同步。这是最容易被遗忘的步骤，也是 PR 被打回的常见原因。
+
+**SKILL.md 核心：**
+```yaml
+---
+name: docs-i18n
+description: >
+  文档变更时确保多语言同步。当变更涉及docs/目录、README、导航结构时自动触发。
+  当用户提到"文档更新"、"翻译"、"i18n"、"国际化"时触发。
+  覆盖：7语言导航一致性检查、i18n-guide.md流程执行、覆盖率报告更新。
+  不用于：纯代码变更不涉及文档的场景。
+---
+```
+
+---
+
+### Skill 7: `devops-sentinel` — 运维监控哨兵
+
+```
+devops-sentinel/
+├── SKILL.md
+└── references/
+    ├── heartbeat_config.md     # Heartbeat 配置参考
+    ├── cron_patterns.md        # Cron 任务模式
+    └── channel_alert.md        # 通过 Channel 发送告警
+```
+
+**设计理由：** ZeroClaw 内置 Heartbeat、Cron 和全渠道推送能力。这个 Skill 整合了"定时检查→AI分析→渠道告警"的完整闭环，是 ZeroClaw 作为极低成本运维探针的核心价值体现。
+
+**SKILL.md 核心：**
+```yaml
+---
+name: devops-sentinel
+description: >
+  配置ZeroClaw作为服务器监控哨兵。当用户提到"监控服务器"、"告警"、
+  "健康检查"、"定时任务"、"heartbeat"、"cron"时触发。
+  覆盖：系统资源监控、日志异常检测、多渠道告警推送、自愈Shell操作。
+  不用于：代码开发、PR管理。
+---
+```
+
+---
+
+### Skill 8: `wasm-skill-builder` — WASM Skill 构建器
+
+```
+wasm-skill-builder/
+├── SKILL.md
+├── scripts/
+│   └── build_wasm.sh          # 编译并注册 WASM 模块
+└── references/
+    ├── wasi_stdio_protocol.md # WASI stdin/stdout JSON 协议
+    └── example_tool.rs        # 最小 WASM Tool 示例
+```
+
+**设计理由：** 项目已有完整的 WASM Tool 引擎（`src/tools/wasm_tool.rs` + `wasm_module.rs`，使用 WASI stdio 协议），但缺乏"如何从零构建一个 WASM Skill"的端到端指引。这是社区生态繁荣的关键通道。
+
+**SKILL.md 核心：**
+```yaml
+---
+name: wasm-skill-builder
+description: >
+  构建和注册WASM沙箱化工具插件。当用户提到"创建wasm工具"、"编写插件"、
+  "WASM skill"、"沙箱扩展"时触发。
+  覆盖：Rust to WASM编译、WASI stdio协议、安全注册、测试验证。
+  不用于：普通Rust native tool的开发。
+---
+```
+
+---
+
+## 三、实施优先级矩阵
+
+| 优先级 | Skill | 理由 |
+|--------|-------|------|
+| 🔴 P0 | `rust-code-quality` | **每次提交都用**，立即降低人工审查负担 |
+| 🔴 P0 | `pr-workflow` | **每个PR都用**，规范极复杂且分散 |
+| 🟡 P1 | `security-review` | 高风险变更的守门员，安全是项目的核心卖点 |
+| 🟡 P1 | `docs-i18n` | 7语种同步是 PR 被打回的头号原因 |
+| 🟢 P2 | `new-provider` | 最常见的社区贡献类型 |
+| 🟢 P2 | `new-channel` | 第二常见的社区贡献类型 |
+| 🔵 P3 | `devops-sentinel` | 产品层面的杀手级应用，但属于使用侧而非开发侧 |
+| 🔵 P3 | `wasm-skill-builder` | 生态长期投资，需要 WASM 引擎成熟度支撑 |
+
+---
+
+## 四、专家共识：设计原则总结
+
+| 原则 | 来源 | 在 Skill 中的体现 |
+|------|------|-------------------|
+| **先专注一事** | Anthropic 指南 | 每个 Skill 只有一个明确的任务领域 |
+| **代码优先于文字** | Anthropic 指南 | 验证步骤用 `scripts/` 而非纯文字描述 |
+| **渐进式加载** | Anthropic 指南 | description 精准触发，正文按需加载 |
+| **SRP 单一职责** | AGENTS.md §3.4 | 与 SOP 引擎分工明确（Skill=知识, SOP=流程） |
+| **Secure by Default** | AGENTS.md §3.6 | 脚本仅在沙箱内执行，声明所需权限 |
+| **YAGNI** | AGENTS.md §3.2 | 首批只做 8 个，不贪多 |
+| **Fail Fast** | AGENTS.md §3.5 | 检查不通过直接终止并给出明确错误 |
+
+> [!IMPORTANT]
+> 所有 Skill 的 `scripts/` 必须遵守 `allow_scripts` 配置和 `workspace_only` 沙箱限制。
+> 社区 Open Skills 的脚本应强制通过 Docker 或 WASM 运行时执行。
